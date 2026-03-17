@@ -1,0 +1,414 @@
+#!/bin/bash
+# build_dmg.sh — Builds a macOS DMG installer for Panda3D.
+# Generated from build_dmg.sh.in by CMake configure_file + file(GENERATE).
+set -euo pipefail
+
+VERSION="@PROJECT_VERSION@"
+MAJOR_VER="@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@"
+SRCDIR="@PROJECT_SOURCE_DIR@"
+BUILDDIR="@PROJECT_BINARY_DIR@"
+OUTPUTDIR="$<IF:$<BOOL:@IS_MULTICONFIG@>,@PROJECT_BINARY_DIR@/$<CONFIG>,@PROJECT_BINARY_DIR@>"
+
+INSTALLDIR="@_DMG_INSTALL_DIR@"
+HAVE_PYTHON=@_DMG_HAVE_PYTHON@
+PYTHON_VERSIONS="@_DMG_PYTHON_VERSIONS@"
+HAVE_FFMPEG=@_DMG_HAVE_FFMPEG@
+HAVE_FMODEX=@_DMG_HAVE_FMODEX@
+
+EXCLUDE_BINARIES="deploy-stub deploy-stubw run_tests"
+
+DMG_NAME="Panda3D-${VERSION}"
+if [[ -n "${PYTHON_VERSIONS}" && "${PYTHON_VERSIONS}" != *" "* ]]; then
+  DMG_NAME="${DMG_NAME}-py${PYTHON_VERSIONS}"
+fi
+DMG_NAME="${DMG_NAME}.dmg"
+
+echo "Building macOS DMG: ${DMG_NAME}"
+
+# ── Cleanup ──────────────────────────────────────────────────────────────────
+
+rm -rf dstroot
+rm -f Panda3D-rw.dmg "${DMG_NAME}"
+
+# ── Step 1: Install to a flat staging area ───────────────────────────────────
+# Use cmake --install to get the full, properly-configured install tree.
+
+STAGING="${BUILDDIR}/_dmg_staging"
+rm -rf "${STAGING}"
+cmake --install "${BUILDDIR}" --prefix "${STAGING}" $<$<BOOL:@IS_MULTICONFIG@>:--config $<CONFIG>>
+
+# ── Step 2: Stage into per-package directories ───────────────────────────────
+
+# --- base: core libraries + config + models ---
+mkdir -p "dstroot/base/${INSTALLDIR}/lib"
+mkdir -p "dstroot/base/${INSTALLDIR}/etc"
+
+# Libraries (exclude ffmpeg and fmod — they get their own packages)
+for f in "${STAGING}/lib/"*; do
+  base=$(basename "$f")
+  case "$base" in
+    libp3ffmpeg*|libp3fmod_audio*|libfmodex*|libfmodexL*|*.a) continue ;;
+  esac
+  cp -R -P "$f" "dstroot/base/${INSTALLDIR}/lib/"
+done
+
+# Config files
+if [[ -d "${STAGING}/etc/panda3d" ]]; then
+  cp -R "${STAGING}/etc/panda3d/"* "dstroot/base/${INSTALLDIR}/etc/"
+elif [[ -d "${STAGING}/etc" ]]; then
+  cp -R "${STAGING}/etc/"* "dstroot/base/${INSTALLDIR}/etc/"
+fi
+
+# Models
+if [[ -d "${STAGING}/share/panda3d" ]]; then
+  cp -R "${STAGING}/share/panda3d" "dstroot/base/${INSTALLDIR}/models" 2>/dev/null || true
+fi
+# Fallback: models from build tree
+if [[ -d "${OUTPUTDIR}/models" && ! -d "dstroot/base/${INSTALLDIR}/models" ]]; then
+  cp -R "${OUTPUTDIR}/models" "dstroot/base/${INSTALLDIR}/models"
+fi
+
+cp -R "${SRCDIR}/doc/LICENSE"       "dstroot/base/${INSTALLDIR}/LICENSE"
+cp -R "${SRCDIR}/doc/ReleaseNotes"  "dstroot/base/${INSTALLDIR}/ReleaseNotes"
+
+if [[ -d "${STAGING}/lib/Frameworks" ]]; then
+  cp -R "${STAGING}/lib/Frameworks" "dstroot/base/${INSTALLDIR}/Frameworks"
+fi
+if [[ -d "${OUTPUTDIR}/plugins" ]]; then
+  cp -R "${OUTPUTDIR}/plugins" "dstroot/base/${INSTALLDIR}/plugins"
+fi
+
+# --- tools: command-line utilities ---
+mkdir -p "dstroot/tools/${INSTALLDIR}/bin"
+mkdir -p "dstroot/tools/etc/paths.d"
+# Trailing newline is important (works around macOS bug)
+printf '/%s/bin\n' "${INSTALLDIR}" > "dstroot/tools/etc/paths.d/Panda3D"
+
+mkdir -p "dstroot/tools/usr/local/share/man/man1"
+if [[ -d "${SRCDIR}/doc/man" ]]; then
+  install -m 0644 "${SRCDIR}"/doc/man/*.1 "dstroot/tools/usr/local/share/man/man1/"
+fi
+
+for f in "${STAGING}/bin/"*; do
+  base=$(basename "$f")
+  skip=0
+  for excl in ${EXCLUDE_BINARIES}; do
+    [[ "$base" == "$excl" ]] && skip=1 && break
+  done
+  [[ $skip -eq 1 ]] && continue
+  cp -R "$f" "dstroot/tools/${INSTALLDIR}/bin/"
+done
+
+# --- headers ---
+mkdir -p "dstroot/headers/${INSTALLDIR}"
+if [[ -d "${STAGING}/include" ]]; then
+  cp -R "${STAGING}/include" "dstroot/headers/${INSTALLDIR}/include"
+fi
+
+# --- samples ---
+HAS_SAMPLES=0
+if [[ -d "${SRCDIR}/samples" ]]; then
+  HAS_SAMPLES=1
+  mkdir -p "dstroot/samples/${INSTALLDIR}/samples"
+  cp -R "${SRCDIR}/samples/"* "dstroot/samples/${INSTALLDIR}/samples"
+fi
+
+# --- Python code ---
+if [[ "${HAVE_PYTHON}" == "1" ]]; then
+  mkdir -p "dstroot/pythoncode/${INSTALLDIR}/panda3d"
+
+  # pandac
+  if [[ -d "${OUTPUTDIR}/pandac" ]]; then
+    cp -R "${OUTPUTDIR}/pandac" "dstroot/pythoncode/${INSTALLDIR}/pandac"
+  fi
+
+  # direct Python package
+  if [[ -d "${OUTPUTDIR}/direct" ]]; then
+    cp -R "${OUTPUTDIR}/direct" "dstroot/pythoncode/${INSTALLDIR}/direct"
+  fi
+
+  # Top-level .py and .so files
+  for f in "${OUTPUTDIR}"/*.so "${OUTPUTDIR}"/*.py; do
+    [[ -f "$f" ]] && cp -R "$f" "dstroot/pythoncode/${INSTALLDIR}/"
+  done
+
+  # Pmw
+  if [[ -d "${OUTPUTDIR}/Pmw" ]]; then
+    cp -R "${OUTPUTDIR}/Pmw" "dstroot/pythoncode/${INSTALLDIR}/Pmw"
+  fi
+
+  # panda3d.dist-info
+  if [[ -d "${OUTPUTDIR}/panda3d.dist-info" ]]; then
+    cp -R "${OUTPUTDIR}/panda3d.dist-info" "dstroot/pythoncode/${INSTALLDIR}/panda3d.dist-info"
+  fi
+
+  # Pure Python modules from panda3d/
+  for f in "${OUTPUTDIR}/panda3d/"*.py; do
+    [[ -f "$f" ]] && cp "$f" "dstroot/pythoncode/${INSTALLDIR}/panda3d/"
+  done
+fi
+
+# --- Per-Python-version bindings ---
+for pyver in ${PYTHON_VERSIONS}; do
+  mkdir -p "dstroot/pybindings${pyver}/Library/Python/${pyver}/site-packages"
+  mkdir -p "dstroot/pybindings${pyver}/${INSTALLDIR}/panda3d"
+
+  # Copy extension modules (platform-specific .so files)
+  for f in "${OUTPUTDIR}/panda3d/"*.so; do
+    [[ -f "$f" ]] || continue
+    base=$(basename "$f")
+    # Skip pure-python .py files (already in pythoncode)
+    [[ "$base" == *.py ]] && continue
+    cp -R -P "$f" "dstroot/pybindings${pyver}/${INSTALLDIR}/panda3d/"
+  done
+
+  # .pth files so Python can find the Panda3D modules
+  printf '%s' "${INSTALLDIR}" \
+    > "dstroot/pybindings${pyver}/Library/Python/${pyver}/site-packages/Panda3D.pth"
+
+  # python.org framework location
+  fwdir="dstroot/pybindings${pyver}/Library/Frameworks/Python.framework/Versions/${pyver}/lib/python${pyver}/site-packages"
+  mkdir -p "${fwdir}"
+  printf '%s' "${INSTALLDIR}" > "${fwdir}/Panda3D.pth"
+
+  # Homebrew location
+  brewdir="dstroot/pybindings${pyver}/usr/local/lib/python${pyver}/site-packages"
+  mkdir -p "${brewdir}"
+  printf '%s' "${INSTALLDIR}" > "${brewdir}/Panda3D.pth"
+done
+
+# --- ffmpeg plugin ---
+if [[ "${HAVE_FFMPEG}" == "1" ]]; then
+  mkdir -p "dstroot/ffmpeg/${INSTALLDIR}/lib"
+  cp -R "${STAGING}/lib/libp3ffmpeg."* "dstroot/ffmpeg/${INSTALLDIR}/lib/" 2>/dev/null || true
+fi
+
+# --- fmodex plugin ---
+if [[ "${HAVE_FMODEX}" == "1" ]]; then
+  mkdir -p "dstroot/fmodex/${INSTALLDIR}/lib"
+  cp -R "${STAGING}/lib/libp3fmod_audio."* "dstroot/fmodex/${INSTALLDIR}/lib/" 2>/dev/null || true
+  cp -R "${STAGING}/lib/libfmodex"*        "dstroot/fmodex/${INSTALLDIR}/lib/" 2>/dev/null || true
+fi
+
+# ── Clean up VCS / build artifacts from dstroot ──────────────────────────────
+
+find dstroot -name '.git' -o -name '.svn' -o -name 'CVS' -o -name '.cvsignore' \
+  -o -name '__pycache__' | xargs rm -rf 2>/dev/null || true
+find dstroot \( -name '*.pyc' -o -name '*.pyo' \) -delete 2>/dev/null || true
+
+chmod -R 0775 dstroot/*
+
+# ── Step 3: Build .pkg files via pkgbuild ────────────────────────────────────
+
+mkdir -p "dstroot/Panda3D/Panda3D.mpkg/Contents/Packages/"
+mkdir -p "dstroot/Panda3D/Panda3D.mpkg/Contents/Resources/en.lproj/"
+
+PKGS=(base tools headers)
+
+# Post-install scripts for backward-compat symlinks (< 10.15)
+write_legacy_script() {
+  local component="$1" phase="$2" contents="$3"
+  [[ "${INSTALLDIR}" == "/Developer/Panda3D" ]] && return
+  mkdir -p "dstroot/scripts/${component}"
+  cat > "dstroot/scripts/${component}/${phase}" <<SCRIPT
+#!/bin/bash
+IFS=.
+read -a version_info <<< "\$(sw_vers -productVersion)"
+if (( \${version_info[0]} == 10 && \${version_info[1]} < 15 )); then
+${contents}
+fi
+SCRIPT
+  chmod +x "dstroot/scripts/${component}/${phase}"
+}
+
+write_legacy_script base postinstall "
+    pkgutil --pkg-info org.panda3d.panda3d.base.pkg
+    if [ \$? = 0 ]; then
+        rm -rf /Developer/Panda3D
+    fi
+    mkdir -p /Developer
+    ln -s ${INSTALLDIR} /Developer/Panda3D
+"
+
+write_legacy_script tools postinstall "
+    pkgutil --pkg-info org.panda3d.panda3d.tools.pkg
+    if [ \$? = 0 ]; then
+        rm -f /Developer/Tools/Panda3D
+    fi
+    mkdir -p /Developer/Tools
+    ln -s ${INSTALLDIR}/bin /Developer/Tools/Panda3D
+"
+
+if [[ ${HAS_SAMPLES} -eq 1 ]]; then
+  PKGS+=(samples)
+  write_legacy_script samples postinstall "
+      pkgutil --pkg-info org.panda3d.panda3d.samples.pkg
+      if [ \$? = 0 ]; then
+          rm -f /Developer/Examples/Panda3D
+      fi
+      mkdir -p /Developer/Examples
+      ln -s ${INSTALLDIR}/samples /Developer/Examples/Panda3D
+  "
+fi
+
+if [[ "${HAVE_PYTHON}" == "1" ]]; then
+  PKGS+=(pythoncode)
+fi
+for pyver in ${PYTHON_VERSIONS}; do
+  PKGS+=("pybindings${pyver}")
+done
+if [[ "${HAVE_FFMPEG}" == "1" ]]; then
+  PKGS+=(ffmpeg)
+fi
+if [[ "${HAVE_FMODEX}" == "1" ]]; then
+  PKGS+=(fmodex)
+fi
+
+SCRIPT_COMPONENTS=""
+for dir in dstroot/scripts/*/; do
+  [[ -d "$dir" ]] && SCRIPT_COMPONENTS="${SCRIPT_COMPONENTS} $(basename "$dir")"
+done
+
+for pkg in "${PKGS[@]}"; do
+  identifier="org.panda3d.panda3d.${pkg}.pkg"
+  [[ -d "dstroot/${pkg}" ]] || mkdir -p "dstroot/${pkg}"
+
+  scripts_arg=""
+  if [[ " ${SCRIPT_COMPONENTS} " == *" ${pkg} "* ]]; then
+    scripts_arg="--scripts dstroot/scripts/${pkg}"
+  fi
+
+  /usr/bin/pkgbuild \
+    --identifier "${identifier}" \
+    --version "${VERSION}" \
+    --root "dstroot/${pkg}/" \
+    ${scripts_arg} \
+    "dstroot/Panda3D/Panda3D.mpkg/Contents/Packages/${pkg}.pkg"
+done
+
+# ── Step 4: Generate distribution.dist ───────────────────────────────────────
+
+DIST="dstroot/Panda3D/Panda3D.mpkg/Contents/distribution.dist"
+LICENSE_TEXT=$(<"${SRCDIR}/doc/LICENSE")
+
+cat > "${DIST}" <<DIST_HEADER
+<?xml version="1.0" encoding="utf-8"?>
+<installer-script minSpecVersion="1.000000" authoringTool="com.apple.PackageMaker" authoringToolVersion="3.0.3" authoringToolBuild="174">
+    <title>Panda3D SDK ${VERSION}</title>
+    <allowed-os-versions>
+        <os-version min="10.9"/>
+    </allowed-os-versions>
+    <options customize="always" allow-external-scripts="no" rootVolumeOnly="false" hostArchitectures="x86_64,arm64"/>
+    <license language="en" mime-type="text/plain">${LICENSE_TEXT}</license>
+    <script>
+    function isPythonVersionInstalled(version) {
+        return system.files.fileExistsAtPath("/usr/bin/python" + version)
+            || system.files.fileExistsAtPath("/usr/local/bin/python" + version)
+            || system.files.fileExistsAtPath("/opt/local/bin/python" + version)
+            || system.files.fileExistsAtPath("/sw/bin/python" + version)
+            || system.files.fileExistsAtPath("/System/Library/Frameworks/Python.framework/Versions/" + version + "/bin/python")
+            || system.files.fileExistsAtPath("/Library/Frameworks/Python.framework/Versions/" + version + "/bin/python");
+    }
+    </script>
+    <choices-outline>
+        <line choice="base"/>
+DIST_HEADER
+
+# Python choices
+if [[ "${HAVE_PYTHON}" == "1" ]]; then
+  echo '        <line choice="pythoncode">' >> "${DIST}"
+  for pyver in ${PYTHON_VERSIONS}; do
+    echo "            <line choice=\"pybindings${pyver}\"/>" >> "${DIST}"
+  done
+  echo '        </line>' >> "${DIST}"
+fi
+
+echo '        <line choice="tools"/>' >> "${DIST}"
+
+if [[ ${HAS_SAMPLES} -eq 1 ]]; then
+  echo '        <line choice="samples"/>' >> "${DIST}"
+fi
+if [[ "${HAVE_FFMPEG}" == "1" ]]; then
+  echo '        <line choice="ffmpeg"/>' >> "${DIST}"
+fi
+if [[ "${HAVE_FMODEX}" == "1" ]]; then
+  echo '        <line choice="fmodex"/>' >> "${DIST}"
+fi
+echo '        <line choice="headers"/>' >> "${DIST}"
+echo '    </choices-outline>' >> "${DIST}"
+
+# Choice definitions
+cat >> "${DIST}" <<CHOICES
+    <choice id="base" title="Panda3D Base Installation" description="This package contains the Panda3D libraries, configuration files and models/textures that are needed to use Panda3D.&#10;&#10;Location: ${INSTALLDIR}/" start_enabled="false">
+        <pkg-ref id="org.panda3d.panda3d.base.pkg"/>
+    </choice>
+    <choice id="tools" title="Tools" tooltip="Useful tools and model converters" description="This package contains the various utilities that ship with Panda3D, including packaging tools, model converters, and many more.&#10;&#10;Location: ${INSTALLDIR}/bin/">
+        <pkg-ref id="org.panda3d.panda3d.tools.pkg"/>
+    </choice>
+CHOICES
+
+if [[ "${HAVE_PYTHON}" == "1" ]]; then
+  cat >> "${DIST}" <<PYCHOICE
+    <choice id="pythoncode" title="Python Support" tooltip="Python bindings for the Panda3D libraries" description="This package contains the 'direct', 'pandac' and 'panda3d' python packages that are needed to do Python development with Panda3D.&#10;&#10;Location: ${INSTALLDIR}/">
+        <pkg-ref id="org.panda3d.panda3d.pythoncode.pkg"/>
+    </choice>
+PYCHOICE
+fi
+
+for pyver in ${PYTHON_VERSIONS}; do
+  cat >> "${DIST}" <<BINDCHOICE
+    <choice id="pybindings${pyver}" start_selected="isPythonVersionInstalled('${pyver}')" title="Python ${pyver} Bindings" tooltip="Python bindings for the Panda3D libraries" description="Support for Python ${pyver}.">
+        <pkg-ref id="org.panda3d.panda3d.pybindings${pyver}.pkg"/>
+    </choice>
+BINDCHOICE
+done
+
+if [[ "${HAVE_FFMPEG}" == "1" ]]; then
+  cat >> "${DIST}" <<FFCHOICE
+    <choice id="ffmpeg" title="FFMpeg Plug-In" tooltip="FFMpeg video and audio decoding plug-in" description="This package contains the FFMpeg plug-in, which is used for decoding video and audio files.">
+        <pkg-ref id="org.panda3d.panda3d.ffmpeg.pkg"/>
+    </choice>
+FFCHOICE
+fi
+
+if [[ "${HAVE_FMODEX}" == "1" ]]; then
+  cat >> "${DIST}" <<FMCHOICE
+    <choice id="fmodex" title="FMOD Ex Plug-In" tooltip="FMOD Ex audio output plug-in" description="This package contains the FMOD Ex audio plug-in, which is a commercial library for playing sounds.">
+        <pkg-ref id="org.panda3d.panda3d.fmodex.pkg"/>
+    </choice>
+FMCHOICE
+fi
+
+if [[ ${HAS_SAMPLES} -eq 1 ]]; then
+  cat >> "${DIST}" <<SAMPCHOICE
+    <choice id="samples" title="Sample Programs" tooltip="Python sample programs that use Panda3D" description="This package contains the Python sample programs that can help you with learning how to use Panda3D.&#10;&#10;Location: ${INSTALLDIR}/samples">
+        <pkg-ref id="org.panda3d.panda3d.samples.pkg"/>
+    </choice>
+SAMPCHOICE
+fi
+
+cat >> "${DIST}" <<HDRCHOICE
+    <choice id="headers" title="C++ Header Files" tooltip="Header files for C++ development with Panda3D" description="This package contains the C++ header files that are needed in order to do C++ development with Panda3D. You don't need this if you want to develop in Python.&#10;&#10;Location: ${INSTALLDIR}/include/" start_selected="false">
+        <pkg-ref id="org.panda3d.panda3d.headers.pkg"/>
+    </choice>
+HDRCHOICE
+
+# Package references with sizes
+for pkg in "${PKGS[@]}"; do
+  size=$(du -sk "dstroot/${pkg}" 2>/dev/null | cut -f1)
+  [[ -z "${size}" ]] && size=0
+  echo "    <pkg-ref id=\"org.panda3d.panda3d.${pkg}.pkg\" installKBytes=\"${size}\" version=\"1\" auth=\"Root\">file:./Contents/Packages/${pkg}.pkg</pkg-ref>" >> "${DIST}"
+done
+
+echo '</installer-script>' >> "${DIST}"
+
+# ── Step 5: Create DMG ──────────────────────────────────────────────────────
+
+hdiutil create Panda3D-rw.dmg -fs HFS+ -volname "Panda3D SDK ${VERSION}" -srcfolder dstroot/Panda3D
+hdiutil convert Panda3D-rw.dmg -format UDBZ -o "${DMG_NAME}"
+rm -f Panda3D-rw.dmg
+
+# Cleanup
+rm -rf dstroot "${STAGING}"
+
+echo "DMG created: ${DMG_NAME}"

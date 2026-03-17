@@ -42,6 +42,15 @@ vgcore.*
 /*.txz
 /*.apk
 
+# Compressed archives
+/*.zip
+/*.7z
+/*.tar
+/*.tar.gz
+/*.tgz
+/*.tar.bz2
+/*.tar.xz
+
 # CMake
 /build/
 CMakeCache.txt

@@ -95,7 +95,7 @@ More information can be found below.
 Linux and FreeBSD users can install Panda3D manually, however, using the
 following sequence of commands (execute as root):
 
-  python makepanda/installpanda.py --prefix /usr/local
+  cmake --install build --prefix /usr/local
   ldconfig
 
 

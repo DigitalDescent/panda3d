@@ -5,7 +5,7 @@ import re
 import sys
 import shutil
 
-# Ensure user WANTS th
+# Ensure user WANTS this
 if len(sys.argv) < 2 or sys.argv[1] != '--yes':
     print('======== MAKEPANDA SELF-DESTRUCT ========')
     print('This script will destroy every trace of')

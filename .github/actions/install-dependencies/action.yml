@@ -1,0 +1,69 @@
+name: Install Dependencies
+description: Install OS-specific build dependencies and fetch thirdparty packages
+
+inputs:
+  extra-ubuntu-packages:
+    description: Additional Ubuntu packages to install (space-separated)
+    required: false
+    default: ''
+  extra-macos-setup:
+    description: Additional shell commands to run after macOS thirdparty download
+    required: false
+    default: ''
+  cache-thirdparty:
+    description: Whether to cache Windows thirdparty packages
+    required: false
+    default: 'false'
+  cache-key:
+    description: Cache key for Windows thirdparty (only used when cache-thirdparty is true)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install \
+          build-essential bison flex \
+          libfreetype6-dev libjpeg-dev libode-dev \
+          libopenal-dev libpng-dev libssl-dev libvorbis-dev libx11-dev \
+          libxcursor-dev libxrandr-dev nvidia-cg-toolkit zlib1g-dev \
+          libgl1-mesa-dev libegl1-mesa-dev libgl1-mesa-dri mesa-utils-extra \
+          ${{ inputs.extra-ubuntu-packages }}
+
+    - name: Cache thirdparty packages (Windows)
+      if: runner.os == 'Windows' && inputs.cache-thirdparty == 'true'
+      uses: actions/cache@v5
+      with:
+        path: thirdparty
+        key: ${{ inputs.cache-key }}
+
+    - name: Get thirdparty packages (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        if (!(Test-Path thirdparty/win-libs-vc14-x64)) {
+          $wc = New-Object System.Net.WebClient
+          $wc.DownloadFile("https://www.panda3d.org/download/panda3d-1.10.16/panda3d-1.10.16-tools-win64.zip", "thirdparty-tools.zip")
+          Expand-Archive -Path thirdparty-tools.zip
+          Move-Item -Path thirdparty-tools/panda3d-1.10.16/thirdparty -Destination .
+        }
+
+    - name: Get thirdparty packages (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        curl -O https://www.panda3d.org/download/panda3d-1.10.16/panda3d-1.10.16-tools-mac.tar.gz
+        tar -xf panda3d-1.10.16-tools-mac.tar.gz
+        mv panda3d-1.10.16/thirdparty thirdparty
+        rmdir panda3d-1.10.16
+        ${{ inputs.extra-macos-setup }}
+
+    - name: Set up Xcode (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer

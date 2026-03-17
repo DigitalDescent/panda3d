@@ -1,0 +1,96 @@
+#!/bin/sh
+# build_freebsd_pkg.sh — Builds a FreeBSD package for Panda3D.
+# Generated from build_freebsd_pkg.sh.in by CMake configure_file + file(GENERATE).
+set -eu
+
+VERSION="@PROJECT_VERSION@"
+SRCDIR="@PROJECT_SOURCE_DIR@"
+BUILDDIR="@PROJECT_BINARY_DIR@"
+
+echo "Building FreeBSD package for Panda3D ${VERSION}"
+
+# ── Stage the installation ───────────────────────────────────────────────────
+
+rm -rf targetroot pkg-plist +DESC +MANIFEST
+mkdir targetroot
+
+# Use cmake --install to populate the staging directory.
+cmake --install "${BUILDDIR}" --prefix targetroot/usr/local $<$<BOOL:@IS_MULTICONFIG@>:--config $<CONFIG>>
+
+# ── Generate the packing list ────────────────────────────────────────────────
+
+plist_txt=""
+for f in $(find targetroot/usr/local/ -type f); do
+  plist_txt="${plist_txt}${f#targetroot/usr/local/}
+"
+done
+
+plist_txt="${plist_txt}@postexec /sbin/ldconfig -m /usr/local/lib
+@postunexec /sbin/ldconfig -R
+"
+
+# Add @dir entries for panda3d directories
+for remdir in lib share/panda3d include/panda3d; do
+  if [ -d "targetroot/usr/local/${remdir}" ]; then
+    for d in $(find "targetroot/usr/local/${remdir}" -type d | sort -r); do
+      plist_txt="${plist_txt}@dir ${d#targetroot/usr/local/}
+"
+    done
+  fi
+done
+
+# ── Detect architecture ─────────────────────────────────────────────────────
+
+pkg_arch=$(echo "$(pkg config abi | tr '[:upper:]' '[:lower:]' | cut -d: -f1,2):*")
+
+# ── Detect Python dependency ─────────────────────────────────────────────────
+
+dependencies=""
+if command -v python3 >/dev/null 2>&1; then
+  pyver_nodot=$(python3 -c 'import sys; print(f"{sys.version_info[0]}{sys.version_info[1]}")')
+  python_dep=$(pkg query "\n\t%n : {\n\t\torigin : %o,\n\t\tversion : %v\n\t},\n" "python${pyver_nodot}" 2>/dev/null || true)
+  if [ -n "${python_dep}" ]; then
+    dependencies="${python_dep}"
+  fi
+fi
+
+# ── Write package metadata ───────────────────────────────────────────────────
+
+instsize=$(du -sk targetroot | cut -f1)
+instsize_mb=$((instsize / 1024))
+
+cat > "+DESC" <<EOF
+Panda3D is a game engine which includes graphics, audio, I/O, collision
+detection, and other abilities relevant to the creation of 3D games.
+Panda3D is open source and free software under the revised BSD license,
+and can be used for both free and commercial game development at no
+financial cost.
+
+This package contains the SDK for development with Panda3D.
+
+WWW: https://www.panda3d.org/
+EOF
+
+cat > "+MANIFEST" <<EOF
+name: panda3d
+version: ${VERSION}
+arch: ${pkg_arch}
+origin: devel/panda3d
+comment: "Panda3D free 3D engine SDK"
+www: https://www.panda3d.org
+maintainer: rdb <me@rdb.name>
+prefix: /usr/local
+flatsize: ${instsize_mb}
+deps: {${dependencies}}
+EOF
+
+printf '%s' "${plist_txt}" > pkg-plist
+
+# ── Build the package ────────────────────────────────────────────────────────
+
+pkg create -p pkg-plist -r "$(pwd)/targetroot" -m . -o .
+
+echo "FreeBSD package created."
+
+# Cleanup
+rm -rf targetroot pkg-plist +DESC +MANIFEST

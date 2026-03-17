@@ -171,6 +171,9 @@ if(BUILD_TESTS)
   add_subdirectory(tests "${CMAKE_BINARY_DIR}/tests")
 endif()
 
+# Installer target (NSIS on Windows, DEB/RPM on Linux, DMG on macOS, pkg on FreeBSD)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/installer/Installer.cmake")
+
 # Generate the Panda3DConfig.cmake file so find_package(Panda3D) works, and
 # also register the build directory with CMake's package registry.
 

@@ -1,11 +1,17 @@
 @echo off
 
 REM
-REM Check the Windows architecture and determine with Python
-REM to use; 64-bit or 32-bit. Verify that we can find the 
-REM 'makepanda' python script and the python interpreter.
-REM If we can find both, then run 'makepanda'.
+REM CMake-based build wrapper for Panda3D.
 REM
+REM Locates a Python 3.8+ interpreter and runs makepanda.py,
+REM which in turn drives the CMake build system.
+REM
+
+if not exist makepanda\makepanda.py goto :missing_script
+
+REM Try thirdparty Python first (legacy layout), then system Python.
+set thirdparty=thirdparty
+if defined MAKEPANDA_THIRDPARTY set thirdparty=%MAKEPANDA_THIRDPARTY%
 
 if %PROCESSOR_ARCHITECTURE% == AMD64 (
   set suffix=-x64
@@ -13,33 +19,35 @@ if %PROCESSOR_ARCHITECTURE% == AMD64 (
   set suffix=
 )
 
-set thirdparty=thirdparty
-if defined MAKEPANDA_THIRDPARTY set thirdparty=%MAKEPANDA_THIRDPARTY%
+set PYTHON_EXE=
 
-if exist %thirdparty%\win-python3.8%suffix%\python.exe (
-  set pythondir=win-python3.8%suffix%
-) else (
-  set pythondir=win-python3.7%suffix%
+REM Search thirdparty for Python 3.14 down to 3.8.
+for %%V in (3.14 3.13 3.12 3.11 3.10 3.9 3.8) do (
+  if exist "%thirdparty%\win-python%%V%suffix%\python.exe" (
+    if not defined PYTHON_EXE set "PYTHON_EXE=%thirdparty%\win-python%%V%suffix%\python.exe"
+  )
 )
 
-if not exist makepanda\makepanda.py goto :missing1
-if not exist %thirdparty%\%pythondir%\python.exe goto :missing2
-%thirdparty%\%pythondir%\python.exe makepanda\makepanda.py %*
-if errorlevel 1 if x%1 == x--slavebuild exit 1
-goto done
+REM Fall back to Python on PATH.
+if not defined PYTHON_EXE (
+  where python >nul 2>&1
+  if not errorlevel 1 set PYTHON_EXE=python
+)
 
-:missing1
+if not defined PYTHON_EXE goto :missing_python
+
+"%PYTHON_EXE%" makepanda\makepanda.py %*
+goto :done
+
+:missing_script
   echo You need to change directory to the root of the panda source tree
-  echo before invoking makepanda.  For further install instructions, read 
-  echo the installation instructions in the file doc/INSTALL-MK.
-  goto done
+  echo before invoking makepanda.
+  goto :done
 
-:missing2
-  echo %thirdparty%
-  echo You seem to be missing the 'thirdparty' directory.  You probably checked
-  echo the source code out from GitHub.  The GitHub repository is
-  echo missing the 'thirdparty' directory.  You will need to supplement the
-  echo code by downloading the 'thirdparty' directory from www.panda3d.org
-  goto done
+:missing_python
+  echo Could not find a Python interpreter.  Please install Python 3.8+
+  echo and make sure it is on your PATH, or provide a thirdparty directory
+  echo containing a win-python3.X%suffix% subdirectory.
+  goto :done
 
 :done

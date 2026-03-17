@@ -1,0 +1,42 @@
+name: CMake Python Build and Test
+description: Setup, configure, build and test a specific Python version with CMake
+
+inputs:
+  python-version:
+    description: Python version to set up
+    required: true
+  config:
+    description: CMake build configuration (Standard, Coverage, etc.)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Configure (Python ${{ inputs.python-version }})
+      working-directory: build
+      shell: bash
+      run: >
+        cmake -DWANT_PYTHON_VERSION=${{ inputs.python-version }} -DHAVE_PYTHON=YES
+        -DPython_FIND_REGISTRY=NEVER -DPython_ROOT="$pythonLocation" .
+
+    - name: Build (Python ${{ inputs.python-version }})
+      working-directory: build
+      shell: bash
+      run: cmake --build . --config ${{ inputs.config }} --parallel 4
+
+    - name: Test (Python ${{ inputs.python-version }})
+      working-directory: build
+      shell: bash
+      env:
+        PYTHONPATH: ${{ inputs.config }}
+        ASAN_OPTIONS: detect_leaks=0:detect_odr_violation=0:log_path=asan.log.py${{ inputs.python-version }}
+      run: |
+        PYTHON_EXECUTABLE=$(grep 'Python_EXECUTABLE:' CMakeCache.txt | sed 's/.*=//')
+        $PYTHON_EXECUTABLE -m pip install -r ../requirements-test.txt
+        export COVERAGE_FILE=.coverage.$RANDOM LLVM_PROFILE_FILE=$PWD/pid-%p.profraw
+        run_pytest ../tests --cov=.

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-egg">
+    <comment>Panda3D egg model</comment>
+    <glob pattern="*.egg"/>
+  </mime-type>
+  <mime-type type="application/x-bam">
+    <comment>Panda3D bam model</comment>
+    <glob pattern="*.bam"/>
+  </mime-type>
+  <mime-type type="application/x-compressed-egg">
+    <comment>Compressed Panda3D egg model</comment>
+    <glob pattern="*.egg.pz"/>
+  </mime-type>
+  <mime-type type="application/x-compressed-bam">
+    <comment>Compressed Panda3D bam model</comment>
+    <glob pattern="*.bam.pz"/>
+  </mime-type>
+  <mime-type type="application/x-pstats">
+    <comment>Panda3D performance data</comment>
+    <glob pattern="*.pstats"/>
+  </mime-type>
+</mime-info>

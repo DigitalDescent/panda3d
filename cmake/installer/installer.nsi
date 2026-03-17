@@ -167,8 +167,6 @@ var READABLE
             SkipODEPyd:
         !endif
 
-        SetOutPath $INSTDIR\pandac\input
-        File /r "${BUILT}\pandac\input\*"
         SetOutPath $INSTDIR\Pmw
         File /nonfatal /r /x CVS "${BUILT}\Pmw\*"
         SetOutPath $INSTDIR\panda3d.dist-info
@@ -364,8 +362,6 @@ SectionGroup "Python modules" SecGroupPython
         Delete "$INSTDIR\panda3d.py"
         Delete "$INSTDIR\panda3d.pyc"
         Delete "$INSTDIR\panda3d.pyo"
-        SetOutPath $INSTDIR\pandac
-        File /r "${BUILT}\pandac\*.py"
         SetOutPath $INSTDIR\panda3d
         File /r "${BUILT}\panda3d\*.py"
     SectionEnd

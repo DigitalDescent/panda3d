@@ -125,9 +125,8 @@ sudo dpkg -i panda3d*.deb
 ```
 
 If you are not using a Linux distribution that supports .deb or .rpm packages, you
-may have to use the installpanda.py script instead, which will directly copy the
-files into the appropriate locations on your computer.  You may have to run the
-`ldconfig` tool in order to update your library cache after installing Panda3D.
+can use `cmake --install build --prefix /usr/local` to install directly, followed
+by `ldconfig` to update your library cache.
 
 Alternatively, you can add the `--wheel` option, which will produce a .whl
 file that can be installed into a Python installation using `pip`.
