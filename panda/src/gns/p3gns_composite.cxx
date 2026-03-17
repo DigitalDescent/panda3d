@@ -1,0 +1,7 @@
+#include "config_gns.cxx"
+#include "gnsConnection.cxx"
+#include "gnsConnectionListener.cxx"
+#include "gnsConnectionManager.cxx"
+#include "gnsConnectionReader.cxx"
+#include "gnsConnectionWriter.cxx"
+#include "gnsNetAddress.cxx"

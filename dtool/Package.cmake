@@ -112,6 +112,7 @@ if(THIRDPARTY_DIRECTORY)
     VorbisFile
     VRPN
     ZLIB
+    GameNetworkingSockets
   )
 
     string(TOLOWER "${_Package}" _package)
@@ -923,3 +924,13 @@ package_option(VRPN
   are building Panda3D for a fixed VRPN-based VR installation.")
 
 package_status(VRPN "VRPN")
+
+# GameNetworkingSockets (Valve)
+find_package(GameNetworkingSockets QUIET)
+
+package_option(GameNetworkingSockets
+  "Enables support for Valve's GameNetworkingSockets transport layer."
+  FOUND_AS GameNetworkingSockets
+  IMPORTED_AS GameNetworkingSockets::GameNetworkingSockets)
+
+package_status(GameNetworkingSockets "GameNetworkingSockets")

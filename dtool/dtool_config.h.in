@@ -81,6 +81,9 @@
 /* Define if we have the SDL library. */
 #cmakedefine HAVE_SDL
 
+/* Define if we have Valve GameNetworkingSockets. */
+#cmakedefine HAVE_GAMENETWORKINGSOCKETS
+
 /* Define if we have X11. */
 #cmakedefine HAVE_X11
 

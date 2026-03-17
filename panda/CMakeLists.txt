@@ -39,6 +39,7 @@ add_subdirectory(src/mathutil)
 add_subdirectory(src/movies)
 add_subdirectory(src/nativenet)
 add_subdirectory(src/net)
+add_subdirectory(src/gns)
 add_subdirectory(src/pandabase)
 add_subdirectory(src/parametrics)
 add_subdirectory(src/pgraph)
@@ -211,6 +212,12 @@ build_apps = direct.dist.commands:finalize_distribution_options
     set_target_properties(panda3d.vrpn PROPERTIES CXX_EXCEPTIONS ON)
 
     export_targets(VRPNPython NAMESPACE "Panda3D::Python::" COMPONENT VRPNDevel)
+  endif()
+
+  if(HAVE_GAMENETWORKINGSOCKETS)
+    add_python_module(panda3d.gns p3gns IMPORT panda3d.core COMPONENT GNSPython)
+
+    export_targets(GNSPython NAMESPACE "Panda3D::Python::" COMPONENT GNSDevel)
   endif()
 
   export_targets(Python NAMESPACE "Panda3D::Python::" COMPONENT CoreDevel)

@@ -88,7 +88,7 @@ PkgListSet(["PYTHON", "DIRECT",                        # Python support
   "ZLIB", "PNG", "JPEG", "TIFF", "OPENEXR", "SQUISH",  # 2D Formats support
   "FCOLLADA", "ASSIMP", "EGG",                         # 3D Formats support
   "FREETYPE", "HARFBUZZ",                              # Text rendering
-  "VRPN", "OPENSSL",                                   # Transport
+  "VRPN", "GNS", "OPENSSL",                            # Transport
   "FFTW",                                              # Algorithm helpers
   "ARTOOLKIT", "OPENCV", "DIRECTCAM", "VISION",        # Augmented Reality
   "GTK3",                                              # GTK3 is used for PStats on Unix
@@ -797,6 +797,19 @@ if (COMPILER == "MSVC"):
         LibName("BULLET", GetThirdpartyDir() + "bullet/lib/BulletCollision" + suffix)
         LibName("BULLET", GetThirdpartyDir() + "bullet/lib/BulletDynamics" + suffix)
         LibName("BULLET", GetThirdpartyDir() + "bullet/lib/BulletSoftBody" + suffix)
+    if (PkgSkip("GNS")==0):
+        if os.path.isdir(GetThirdpartyDir() + "steamworks"):
+            # Building against Steamworks SDK (bundled GNS).
+            IncDirectory("GNS", GetThirdpartyDir() + "steamworks/public")
+            if GetTargetArch() == 'x64':
+                LibName("GNS", GetThirdpartyDir() + "steamworks/redistributable_bin/win64/steam_api64.lib")
+            else:
+                LibName("GNS", GetThirdpartyDir() + "steamworks/redistributable_bin/steam_api.lib")
+            DefSymbol("GNS", "GNS_USE_STEAMWORKS", "")
+        else:
+            # Building against standalone GameNetworkingSockets.
+            IncDirectory("GNS", GetThirdpartyDir() + "gamenetworkingsockets/include")
+            LibName("GNS", GetThirdpartyDir() + "gamenetworkingsockets/lib/GameNetworkingSockets.lib")
 
 if (COMPILER=="GCC"):
     if GetTarget() != "darwin":
@@ -858,6 +871,7 @@ if (COMPILER=="GCC"):
     SmartPkgEnable("SQUISH",    "",          ("squish"), "squish.h")
     SmartPkgEnable("TIFF",      "libtiff-4", ("tiff"), "tiff.h")
     SmartPkgEnable("VRPN",      "",          ("vrpn", "quat"), ("vrpn", "quat.h", "vrpn/vrpn_Types.h"))
+    SmartPkgEnable("GNS",       "",          ("GameNetworkingSockets"), ("steam/steamnetworkingsockets.h",))
     SmartPkgEnable("OPUS",      "opusfile",  ("opusfile", "opus", "ogg"), ("ogg/ogg.h", "opus/opusfile.h", "opus"))
     SmartPkgEnable("JPEG",      "",          ("jpeg"), "jpeglib.h")
     SmartPkgEnable("MIMALLOC",  "",          ("mimalloc"), "mimalloc.h")
@@ -2898,6 +2912,8 @@ if not PkgSkip("ODE"):
     panda_modules.append('ode')
 if not PkgSkip("VRPN"):
     panda_modules.append('vrpn')
+if not PkgSkip("GNS"):
+    panda_modules.append('gns')
 
 panda_modules_code = """
 "This module is deprecated.  Import from panda3d.core and other panda3d.* modules instead."
@@ -4828,6 +4844,41 @@ if not PkgSkip("BULLET"):
     PyTargetAdd('bullet.pyd', input='libpandabullet.dll')
     PyTargetAdd('bullet.pyd', input=COMMON_PANDA_LIBS)
     PyTargetAdd('bullet.pyd', opts=['WINUSER', 'BULLET'])
+
+#
+# DIRECTORY: panda/src/gns/
+#
+if not PkgSkip("GNS"):
+    OPTS=['DIR:panda/src/gns', 'BUILDING:PANDA_GNS', 'GNS']
+    TargetAdd('p3gns_composite.obj', opts=OPTS, input='p3gns_composite.cxx')
+
+    OPTS=['DIR:panda/src/gns', 'GNS']
+    IGATEFILES=GetDirectoryContents('panda/src/gns', ["*.h", "*_composite*.cxx"])
+    TargetAdd('libpandagns.in', opts=OPTS, input=IGATEFILES)
+    TargetAdd('libpandagns.in', opts=['IMOD:panda3d.gns', 'ILIB:libpandagns', 'SRCDIR:panda/src/gns'])
+
+#
+# DIRECTORY: panda/metalibs/pandagns/
+#
+if not PkgSkip("GNS"):
+    OPTS=['DIR:panda/metalibs/pandagns', 'BUILDING:PANDA_GNS', 'GNS']
+    TargetAdd('pandagns_pandagns.obj', opts=OPTS, input='pandagns.cxx')
+
+    TargetAdd('libpandagns.dll', input='pandagns_pandagns.obj')
+    TargetAdd('libpandagns.dll', input='p3gns_composite.obj')
+    TargetAdd('libpandagns.dll', input=COMMON_PANDA_LIBS)
+    TargetAdd('libpandagns.dll', opts=['WINUSER', 'GNS'])
+
+    OPTS=['DIR:panda/metalibs/pandagns', 'GNS']
+    PyTargetAdd('gns_module.obj', input='libpandagns.in')
+    PyTargetAdd('gns_module.obj', opts=OPTS)
+    PyTargetAdd('gns_module.obj', opts=['IMOD:panda3d.gns', 'ILIB:gns', 'IMPORT:panda3d.core'])
+
+    PyTargetAdd('gns.pyd', input='gns_module.obj')
+    PyTargetAdd('gns.pyd', input='libpandagns_igate.obj')
+    PyTargetAdd('gns.pyd', input='libpandagns.dll')
+    PyTargetAdd('gns.pyd', input=COMMON_PANDA_LIBS)
+    PyTargetAdd('gns.pyd', opts=['WINUSER', 'GNS'])
 
 #
 # DIRECTORY: panda/src/physics/
