@@ -161,11 +161,11 @@ elseif(APPLE)
     "${CMAKE_CURRENT_BINARY_DIR}/build_dmg.sh.in"
     @ONLY)
   file(GENERATE
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/build_dmg.sh"
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/build_dmg.sh"
     INPUT  "${CMAKE_CURRENT_BINARY_DIR}/build_dmg.sh.in")
 
   add_custom_target(installer
-    COMMAND bash "${CMAKE_CURRENT_BINARY_DIR}/build_dmg.sh"
+    COMMAND bash "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/build_dmg.sh"
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
     COMMENT "Building macOS DMG installer..."
     VERBATIM
@@ -190,11 +190,11 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
     "${CMAKE_CURRENT_BINARY_DIR}/build_freebsd_pkg.sh.in"
     @ONLY)
   file(GENERATE
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/build_freebsd_pkg.sh"
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/build_freebsd_pkg.sh"
     INPUT  "${CMAKE_CURRENT_BINARY_DIR}/build_freebsd_pkg.sh.in")
 
   add_custom_target(installer
-    COMMAND sh "${CMAKE_CURRENT_BINARY_DIR}/build_freebsd_pkg.sh"
+    COMMAND sh "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/build_freebsd_pkg.sh"
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
     COMMENT "Building FreeBSD package..."
     VERBATIM
